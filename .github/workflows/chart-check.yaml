@@ -1,0 +1,35 @@
+name: Chart Check
+on:
+  workflow_call:
+    inputs:
+      chart-path:
+        required: true
+        type: string
+      image-repository:
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.19.0
+      - name: Validate chart and its published application
+        env:
+          CHART: ${{ inputs.chart-path }}
+          IMAGE: ${{ inputs.image-repository }}
+        run: |
+          set -euo pipefail
+          helm dependency build "$CHART"
+          helm lint --strict "$CHART"
+          helm template test "$CHART" > "$RUNNER_TEMP/rendered.yaml"
+          version=$(helm show chart "$CHART" | sed -n 's/^appVersion: *//p' | tr -d '"\047')
+          [[ "$version" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          docker manifest inspect "$IMAGE:$version" >/dev/null

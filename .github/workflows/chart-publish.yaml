@@ -1,0 +1,64 @@
+name: Chart Publish
+on:
+  workflow_call:
+    inputs:
+      chart-path:
+        required: true
+        type: string
+      release-sha:
+        required: true
+        type: string
+      version:
+        required: true
+        type: string
+      image-repository:
+        required: true
+        type: string
+permissions: {}
+jobs:
+  publish:
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: write
+    concurrency:
+      group: shared-chart-${{ github.repository }}-${{ inputs.version }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.release-sha }}
+          persist-credentials: false
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v3.19.0
+      - name: Verify, package, and publish independent chart version
+        env:
+          CHART: ${{ inputs.chart-path }}
+          VERSION: ${{ inputs.version }}
+          SHA: ${{ inputs.release-sha }}
+          IMAGE: ${{ inputs.image-repository }}
+          TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$SHA" ]]
+          [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          actual=$(helm show chart "$CHART" | sed -n 's/^version: *//p' | tr -d '"\047')
+          [[ "$actual" == "$VERSION" ]]
+          app=$(helm show chart "$CHART" | sed -n 's/^appVersion: *//p' | tr -d '"\047')
+          [[ "$app" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
+          docker manifest inspect "$IMAGE:$app" >/dev/null
+          helm dependency build "$CHART"
+          helm lint --strict "$CHART"
+          name=$(helm show chart "$CHART" | sed -n 's/^name: *//p')
+          printf '%s' "$TOKEN" | helm registry login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          destination="oci://ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts"
+          if helm show chart "$destination/$name" --version "$VERSION" >/dev/null 2>&1; then
+            echo 'Chart version already published; refusing to overwrite' >&2
+            exit 1
+          fi
+          helm package "$CHART" --destination "$RUNNER_TEMP/chart-package"
+          helm push "$RUNNER_TEMP/chart-package/$name-$VERSION.tgz" "$destination"

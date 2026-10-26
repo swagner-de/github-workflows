@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/(^|/)Chart\\.yaml$/"],
+      "matchStrings": [
+        "# renovate: image=(?<depName>[^\\s]+)\\s+appVersion: [\"']?(?<currentValue>v?[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?)[\"']?"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "semver"
+    }
+  ],
+  "packageRules": [
+    {
+      "matchManagers": ["custom.regex"],
+      "matchFileNames": ["**/Chart.yaml"],
+      "semanticCommitType": "fix",
+      "semanticCommitScope": "deps",
+      "automerge": true
+    }
+  ]
+}

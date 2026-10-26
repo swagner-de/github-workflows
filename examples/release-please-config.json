@@ -1,0 +1,28 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "always-update": true,
+  "separate-pull-requests": true,
+  "packages": {
+    ".": {
+      "release-type": "go",
+      "exclude-paths": ["chart", ".github", "docs", "renovate.json", "renovate.json5", ".renovaterc.json5"],
+      "include-component-in-tag": false,
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Fixes"},
+        {"type": "perf", "section": "Performance"},
+        {"type": "revert", "section": "Reverts"}
+      ]
+    },
+    "chart": {
+      "release-type": "helm",
+      "component": "chart",
+      "include-component-in-tag": true,
+      "changelog-sections": [
+        {"type": "feat", "section": "Features"},
+        {"type": "fix", "section": "Fixes and application updates"},
+        {"type": "revert", "section": "Reverts"}
+      ]
+    }
+  }
+}

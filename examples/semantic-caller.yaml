@@ -1,0 +1,11 @@
+# After publication is explicitly approved, replace the ref with a full commit SHA.
+name: Semantic
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, edited, ready_for_review]
+permissions:
+  contents: read
+  pull-requests: read
+jobs:
+  semantic:
+    uses: swagner-de/github-workflows/.github/workflows/semantic-pr.yaml@main

@@ -1,0 +1,121 @@
+name: Release Please
+on:
+  workflow_call:
+    inputs:
+      chart-path:
+        type: string
+        default: chart
+      config-file:
+        type: string
+        default: release-please-config.json
+      manifest-file:
+        type: string
+        default: .release-please-manifest.json
+    secrets:
+      release-app-client-id:
+        required: true
+      release-app-private-key:
+        required: true
+    outputs:
+      app-released:
+        value: ${{ jobs.release.outputs.app-released }}
+      app-version:
+        value: ${{ jobs.release.outputs.app-version }}
+      app-sha:
+        value: ${{ jobs.release.outputs.app-sha }}
+      chart-released:
+        value: ${{ jobs.release.outputs.chart-released }}
+      chart-version:
+        value: ${{ jobs.release.outputs.chart-version }}
+      chart-sha:
+        value: ${{ jobs.release.outputs.chart-sha }}
+permissions:
+  contents: read
+jobs:
+  release:
+    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: shared-release-please-${{ github.repository }}
+      cancel-in-progress: false
+    outputs:
+      app-released: ${{ steps.rp.outputs.release_created }}
+      app-version: ${{ steps.rp.outputs.version }}
+      app-sha: ${{ steps.rp.outputs.sha }}
+      chart-released: ${{ steps.rp.outputs[format('{0}--release_created', inputs.chart-path)] }}
+      chart-version: ${{ steps.rp.outputs[format('{0}--version', inputs.chart-path)] }}
+      chart-sha: ${{ steps.rp.outputs[format('{0}--sha', inputs.chart-path)] }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Release eligibility
+        id: policy
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          python3 - <<'PY'
+          import os
+          import re
+          import subprocess
+
+          # BEGIN RELEASE POLICY
+          def eligible(message, paths):
+              if not paths:
+                  return False
+              title = message.splitlines()[0]
+              if re.match(r"^chore(?:\([^)]*\))?: release(?:\s|$)", title):
+                  return True
+              if not re.match(r"^(?:fix|feat|perf|revert)(?:\([^)]*\))?!?:", title):
+                  return False
+              excluded_files = {"renovate.json", "renovate.json5", ".renovaterc.json5"}
+              return any(
+                  not path.startswith((".github/", "docs/"))
+                  and path not in excluded_files
+                  for path in paths
+              )
+          # END RELEASE POLICY
+
+          before, after = os.environ['BEFORE'], os.environ['AFTER']
+          if not re.fullmatch(r'[0-9a-f]{40}', before + '') or before == '0' * 40:
+              raise SystemExit('No safe push baseline; bootstrap explicitly before release automation')
+          commits = subprocess.check_output(['git', 'rev-list', f'{before}..{after}'], text=True).splitlines()
+          release = False
+          for commit in commits:
+              message = subprocess.check_output(['git', 'show', '-s', '--format=%B', commit], text=True)
+              paths = subprocess.check_output(['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', commit], text=True).splitlines()
+              release = release or eligible(message, paths)
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write(f'eligible={str(release).lower()}\n')
+          PY
+      - name: Mint scoped release App token
+        if: steps.policy.outputs.eligible == 'true'
+        id: app
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        with:
+          client-id: ${{ secrets.release-app-client-id }}
+          private-key: ${{ secrets.release-app-private-key }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+      - name: Run Release Please
+        if: steps.policy.outputs.eligible == 'true'
+        id: rp
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        with:
+          token: ${{ steps.app.outputs.token }}
+          config-file: ${{ inputs.config-file }}
+          manifest-file: ${{ inputs.manifest-file }}
+      - name: Enable auto-merge on release PRs
+        if: steps.policy.outputs.eligible == 'true' && steps.rp.outputs.prs != ''
+        env:
+          GH_TOKEN: ${{ steps.app.outputs.token }}
+          PRS: ${{ steps.rp.outputs.prs }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r number; do
+            gh pr merge "$number" --repo "$GITHUB_REPOSITORY" --auto --squash
+          done < <(jq -er '.[] | .number | select(type == "number")' <<< "$PRS")
