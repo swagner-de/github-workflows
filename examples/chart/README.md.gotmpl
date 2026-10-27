@@ -1,0 +1,16 @@
+{{ template "chart.header" . }}
+
+Chart version: {{ template "chart.version" . }} <!-- x-release-please-version -->
+Application version: {{ template "chart.appVersion" . }}
+
+{{ template "chart.description" . }}
+
+## Install
+
+```sh
+helm upgrade --install {{ template "chart.name" . }} oci://ghcr.io/swagner-de/charts/{{ template "chart.name" . }} --version {{ template "chart.version" . }} # x-release-please-version
+```
+
+{{ template "chart.requirementsSection" . }}
+
+{{ template "chart.valuesSection" . }}

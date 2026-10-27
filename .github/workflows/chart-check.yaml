@@ -12,6 +12,10 @@ on:
         description: "One name and HTTPS URL per line, separated by whitespace"
         type: string
         default: ''
+      check-docs:
+        description: "Require the chart README.md to match helm-docs v1.14.2 output"
+        type: boolean
+        default: true
 permissions:
   contents: read
 jobs:
@@ -22,6 +26,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+      - name: Check chart documentation
+        if: inputs.check-docs
+        env:
+          CHART: ${{ inputs.chart-path }}
+        run: |
+          set -euo pipefail
+          # BEGIN CHART DOCS CHECK
+          test -f "$CHART/Chart.yaml"
+          test -f "$CHART/README.md"
+          test -f "$CHART/README.md.gotmpl"
+          go run github.com/norwoodj/helm-docs/cmd/helm-docs@v1.14.2 \
+            --chart-search-root="$CHART" --chart-to-generate="$CHART" --dry-run \
+            > "$RUNNER_TEMP/chart-README.md"
+          test -s "$RUNNER_TEMP/chart-README.md"
+          if ! cmp "$CHART/README.md" "$RUNNER_TEMP/chart-README.md"; then
+            diff -u "$CHART/README.md" "$RUNNER_TEMP/chart-README.md" || true
+            echo 'Chart documentation is stale; regenerate with helm-docs v1.14.2.' >&2
+            exit 1
+          fi
+          # END CHART DOCS CHECK
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.19.0

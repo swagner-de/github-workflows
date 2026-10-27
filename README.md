@@ -12,7 +12,7 @@ rewired yet; validation CI tests this repository without publishing artifacts.
 | `semantic-pr.yaml` | no inputs/secrets | Validate PR title and every commit for squash/rebase, using read-only API metadata without executing PR code |
 | `container-check.yaml` | build context, Dockerfile | Local PR build and fixed HIGH/CRITICAL vulnerability gate; no registry credentials |
 | `container-publish.yaml` | released SHA, SemVer, context/Dockerfile | Native amd64 + arm64 build/scan, SBOM, immutable GHCR tag, final-digest provenance attestation |
-| `chart-check.yaml` | chart path, image repository | Dependency build, strict lint/render, published app image availability |
+| `chart-check.yaml` | chart path, image repository, optional Helm repositories and `check-docs` | Generated README freshness, dependency build, strict lint/render, published app image availability |
 | `chart-publish.yaml` | chart path, released SHA, chart SemVer, image repository | Verify chart/app versions, package independently, publish to `ghcr.io/<owner>/charts` |
 
 Every remote action is pinned to a verified commit SHA. Callers must pin these
@@ -68,6 +68,46 @@ before enabling auto-merge. Use the preset
 `github>swagner-de/github-workflows//renovate/chart-app` alongside the default preset.
 Versions/tags must match the consumer's published image
 convention (these publishers use unprefixed SemVer image tags).
+
+## Chart documentation
+
+Chart Check requires `README.md` and `README.md.gotmpl` in the requested chart
+directory and checks the generated output using helm-docs **v1.14.2**. It does not
+commit or push. Consumers can temporarily set `check-docs: false` while migrating;
+enable it before making documentation freshness a required check.
+
+Copy `examples/chart/README.md.gotmpl` into the consumer chart and adapt the install
+repository and prose. Keep chart versions derived from `Chart.yaml` in the template.
+Generate and commit the README locally with:
+
+```sh
+go run github.com/norwoodj/helm-docs/cmd/helm-docs@v1.14.2 --chart-search-root=chart --chart-to-generate=chart
+```
+
+**Release Please** updates the chart version in a separate release PR after
+normal changes merge. The chart component's `extra-files` in
+`examples/release-please-config.json` updates annotated lines in its generated
+`README.md`; that path is relative to the chart component. It does not run
+helm-docs with the release App token.
+
+All other generated documentation changes are covered by the read-only drift
+check. Regenerate and commit the README in the PR that changes chart values,
+application versions, dependencies, or the documentation template. Hosted Renovate
+does not regenerate documentation: if one of its updates causes drift, manually
+update the README on that PR before it can merge. There is no docs-updater workflow
+and no Renovate post-upgrade task.
+
+Every generated chart-version occurrence needs an annotation emitted by the
+template, as in the example. The generic updater replaces only the **first SemVer
+on an annotated line**. Avoid the default chart-version badge (which repeats the
+version in its URL), and do not annotate application or dependency versions.
+Regenerating after a chart release must produce exactly the same README that
+Release Please updated.
+
+Normal chart PRs do **not** require a chart-version increment: `helm lint --strict`
+does not enforce one. Consumers additionally using `ct lint` must disable its
+increment check with `--check-version-increment=false`. Release Please owns chart
+versioning; chart publication verifies the resulting release version.
 
 ## Security boundaries
 
