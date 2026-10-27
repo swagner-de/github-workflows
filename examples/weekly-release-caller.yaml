@@ -1,0 +1,18 @@
+# Replace the shared-workflow ref with the reviewed weekly-release commit.
+name: Release
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  release:
+    uses: swagner-de/github-workflows/.github/workflows/release-please.yaml@b36d3219faa2493a567fd13586af9764ac493ab6
+    secrets:
+      release-app-client-id: ${​{ secrets.RELEASE_BOT_CLIENT_ID }}
+      release-app-private-key: ${​{ secrets.RELEASE_BOT_PRIVATE_KEY }}
+# Keep existing image/chart publishing jobs dependent on release outputs.
+# Only pushes merging a release PR produce those outputs, not scheduled runs.

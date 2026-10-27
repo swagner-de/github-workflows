@@ -33,7 +33,7 @@ permissions:
   contents: read
 jobs:
   release:
-    if: github.event_name == 'push' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    if: contains(fromJSON('["push", "schedule", "workflow_dispatch"]'), github.event_name) && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
@@ -56,6 +56,7 @@ jobs:
         env:
           BEFORE: ${{ github.event.before }}
           AFTER: ${{ github.sha }}
+          EVENT: ${{ github.event_name }}
         run: |
           python3 - <<'PY'
           import os
@@ -63,6 +64,16 @@ jobs:
           import subprocess
 
           # BEGIN RELEASE POLICY
+          def release_mode(event, messages):
+              if event in {"schedule", "workflow_dispatch"}:
+                  return "create"
+              if event == "push" and any(
+                  re.match(r"^chore(?:\([^)]*\))?: release(?:\s|$)", message.splitlines()[0])
+                  for message in messages if message
+              ):
+                  return "tag"
+              return "skip"
+
           def eligible(message, paths):
               if not paths:
                   return False
@@ -79,20 +90,19 @@ jobs:
               )
           # END RELEASE POLICY
 
-          before, after = os.environ['BEFORE'], os.environ['AFTER']
-          if not re.fullmatch(r'[0-9a-f]{40}', before + '') or before == '0' * 40:
-              raise SystemExit('No safe push baseline; bootstrap explicitly before release automation')
-          commits = subprocess.check_output(['git', 'rev-list', f'{before}..{after}'], text=True).splitlines()
-          release = False
-          for commit in commits:
-              message = subprocess.check_output(['git', 'show', '-s', '--format=%B', commit], text=True)
-              paths = subprocess.check_output(['git', 'diff-tree', '--no-commit-id', '--name-only', '-r', commit], text=True).splitlines()
-              release = release or eligible(message, paths)
+          messages = []
+          if os.environ['EVENT'] == 'push':
+              before, after = os.environ['BEFORE'], os.environ['AFTER']
+              if not re.fullmatch(r'[0-9a-f]{40}', before) or before == '0' * 40:
+                  raise SystemExit('No safe push baseline; bootstrap explicitly before release automation')
+              commits = subprocess.check_output(['git', 'rev-list', f'{before}..{after}'], text=True).splitlines()
+              messages = [subprocess.check_output(['git', 'show', '-s', '--format=%B', commit], text=True) for commit in commits]
+          mode = release_mode(os.environ['EVENT'], messages)
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
-              output.write(f'eligible={str(release).lower()}\n')
+              output.write(f'mode={mode}\n')
           PY
       - name: Mint scoped release App token
-        if: steps.policy.outputs.eligible == 'true'
+        if: steps.policy.outputs.mode != 'skip'
         id: app
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         with:
@@ -102,15 +112,17 @@ jobs:
           permission-pull-requests: write
           permission-issues: write
       - name: Run Release Please
-        if: steps.policy.outputs.eligible == 'true'
+        if: steps.policy.outputs.mode != 'skip'
         id: rp
         uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app.outputs.token }}
           config-file: ${{ inputs.config-file }}
           manifest-file: ${{ inputs.manifest-file }}
+          skip-github-release: ${{ steps.policy.outputs.mode == 'create' }}
+          skip-github-pull-request: ${{ steps.policy.outputs.mode == 'tag' }}
       - name: Enable auto-merge on release PRs
-        if: steps.policy.outputs.eligible == 'true' && steps.rp.outputs.prs != ''
+        if: steps.policy.outputs.mode == 'create' && steps.rp.outputs.prs != ''
         env:
           GH_TOKEN: ${{ steps.app.outputs.token }}
           PRS: ${{ steps.rp.outputs.prs }}

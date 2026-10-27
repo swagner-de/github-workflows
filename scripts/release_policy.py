@@ -6,6 +6,17 @@ Release PR merge commits must be processed to tag their proposed releases.
 import re
 
 
+def release_mode(event, messages):
+    if event in {"schedule", "workflow_dispatch"}:
+        return "create"
+    if event == "push" and any(
+        re.match(r"^chore(?:\([^)]*\))?: release(?:\s|$)", message.splitlines()[0])
+        for message in messages if message
+    ):
+        return "tag"
+    return "skip"
+
+
 def eligible(message, paths):
     if not paths:
         return False

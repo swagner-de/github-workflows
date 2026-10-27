@@ -7,12 +7,12 @@ import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 source = ast.parse((ROOT / "scripts" / "release_policy.py").read_text())
-expected = next(node for node in source.body if isinstance(node, ast.FunctionDef))
+expected = [node for node in source.body if isinstance(node, ast.FunctionDef)]
 release = yaml.load((ROOT / ".github/workflows/release-please.yaml").read_text(), Loader=yaml.BaseLoader)
 script = next(step["run"] for step in release["jobs"]["release"]["steps"] if step.get("id") == "policy")
 embedded = script.split("# BEGIN RELEASE POLICY\n", 1)[1].split("# END RELEASE POLICY", 1)[0]
-actual = ast.parse(textwrap.dedent(embedded)).body[0]
-assert ast.dump(expected, include_attributes=False) == ast.dump(actual, include_attributes=False)
+actual = ast.parse(textwrap.dedent(embedded)).body
+assert [ast.dump(node, include_attributes=False) for node in expected] == [ast.dump(node, include_attributes=False) for node in actual]
 semantic_source = ast.parse((ROOT / "scripts/semantic_policy.py").read_text())
 semantic_expected = next(node for node in semantic_source.body if isinstance(node, ast.FunctionDef))
 semantic = yaml.load((ROOT / ".github/workflows/semantic-pr.yaml").read_text(), Loader=yaml.BaseLoader)

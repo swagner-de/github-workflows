@@ -6,6 +6,20 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePolicyTests(unittest.TestCase):
+    def test_weekly_creation_and_immediate_release_tagging(self):
+        path = ROOT / "scripts" / "release_policy.py"
+        spec = importlib.util.spec_from_file_location("release_policy", path)
+        policy = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(policy)
+        self.assertTrue(hasattr(policy, "release_mode"), "weekly release routing is missing")
+        self.assertEqual(policy.release_mode("schedule", []), "create")
+        self.assertEqual(policy.release_mode("workflow_dispatch", []), "create")
+        self.assertEqual(policy.release_mode("push", ["fix(deps): update library"]), "skip")
+        self.assertEqual(policy.release_mode("push", ["ci(deps): update workflow"]), "skip")
+        self.assertEqual(policy.release_mode("push", ["chore(main): release 2.4.1"]), "tag")
+        self.assertEqual(policy.release_mode("push", ["chore(main): release chart 0.8.4"]), "tag")
+        self.assertEqual(policy.release_mode("pull_request", ["chore(main): release 2.4.1"]), "skip")
+
     def test_policy_behavior(self):
         path = ROOT / "scripts" / "release_policy.py"
         self.assertTrue(path.exists(), "release eligibility policy is missing")
