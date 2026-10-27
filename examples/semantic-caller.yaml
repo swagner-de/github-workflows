@@ -1,4 +1,4 @@
-# After publication is explicitly approved, replace the ref with a full commit SHA.
+# Pin to a reviewed shared-workflow commit; Renovate can update this reference.
 name: Semantic
 on:
   pull_request:
@@ -8,4 +8,4 @@ permissions:
   pull-requests: read
 jobs:
   semantic:
-    uses: swagner-de/github-workflows/.github/workflows/semantic-pr.yaml@main
+    uses: swagner-de/github-workflows/.github/workflows/semantic-pr.yaml@8c795518191a6bd367b2a5a998c828da49efb92e

@@ -1,8 +1,8 @@
 # Shared GitHub workflows
 
-Private staging repository. **Do not make public until Sebastian explicitly asks.**
-Public consumers cannot call private reusable workflows; no application repository
-has been rewired yet. Private validation CI tests this repository without publishing.
+Public reusable workflows for `swagner-de` repositories. Repository settings are
+managed by the private `gh-rules` repository. No application repository has been
+rewired yet; validation CI tests this repository without publishing artifacts.
 
 ## Workflow contracts
 
@@ -32,8 +32,8 @@ The caller must trigger semantic validation on `opened`, `synchronize`, `reopene
 and **`edited`** (title changes), as shown in `examples/semantic-caller.yaml`.
 Add the observed semantic check context to required checks or to the fail-closed
 aggregate CI gate; merely having the workflow file does not enforce it. The example
-is documentation, not active public-consumer wiring, and its `main` ref must be
-replaced with an approved immutable SHA. Large PRs whose commits/files exceed GitHub's
+is documentation, not active public-consumer wiring, and uses an immutable SHA.
+Large PRs whose commits/files exceed GitHub's
 API limits fail closed instead of validating a partial list.
 
 ## App → Renovate → chart
@@ -64,7 +64,7 @@ Native Renovate managers do not automatically interpret this custom annotation:
 `renovate/chart-app.json` provides the regex manager for this convention, with
 Docker datasource and the image as dependency name. Explicit image fields also need
 the matching native Helm-values manager or a custom rule. Verify generated PR diffs
-before enabling auto-merge. After public distribution is approved, use the preset
+before enabling auto-merge. Use the preset
 `github>swagner-de/github-workflows//renovate/chart-app` alongside the default preset.
 Versions/tags must match the consumer's published image
 convention (these publishers use unprefixed SemVer image tags).
