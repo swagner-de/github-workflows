@@ -8,6 +8,10 @@ on:
       image-repository:
         required: true
         type: string
+      helm-repositories:
+        description: "One name and HTTPS URL per line, separated by whitespace"
+        type: string
+        default: ''
 permissions:
   contents: read
 jobs:
@@ -23,10 +27,16 @@ jobs:
           version: v3.19.0
       - name: Validate chart and its published application
         env:
+          HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
           CHART: ${{ inputs.chart-path }}
           IMAGE: ${{ inputs.image-repository }}
         run: |
           set -euo pipefail
+          while read -r name repository extra; do
+            [[ -z "$name" ]] && continue
+            [[ "$name" =~ ^[A-Za-z0-9_-]+$ && "$repository" == https://* && -z "$extra" ]]
+            helm repo add "$name" "$repository"
+          done <<< "$HELM_REPOSITORIES"
           helm dependency build "$CHART"
           helm lint --strict "$CHART"
           helm template test "$CHART" > "$RUNNER_TEMP/rendered.yaml"

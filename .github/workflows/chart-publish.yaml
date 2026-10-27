@@ -14,6 +14,10 @@ on:
       image-repository:
         required: true
         type: string
+      helm-repositories:
+        description: "One name and HTTPS URL per line, separated by whitespace"
+        type: string
+        default: ''
 permissions: {}
 jobs:
   publish:
@@ -36,6 +40,7 @@ jobs:
           version: v3.19.0
       - name: Verify, package, and publish independent chart version
         env:
+          HELM_REPOSITORIES: ${{ inputs.helm-repositories }}
           CHART: ${{ inputs.chart-path }}
           VERSION: ${{ inputs.version }}
           SHA: ${{ inputs.release-sha }}
@@ -51,6 +56,11 @@ jobs:
           app=$(helm show chart "$CHART" | sed -n 's/^appVersion: *//p' | tr -d '"\047')
           [[ "$app" =~ ^v?[0-9]+\.[0-9]+\.[0-9]+([+-][0-9A-Za-z.-]+)?$ ]]
           docker manifest inspect "$IMAGE:$app" >/dev/null
+          while read -r name repository extra; do
+            [[ -z "$name" ]] && continue
+            [[ "$name" =~ ^[A-Za-z0-9_-]+$ && "$repository" == https://* && -z "$extra" ]]
+            helm repo add "$name" "$repository"
+          done <<< "$HELM_REPOSITORIES"
           helm dependency build "$CHART"
           helm lint --strict "$CHART"
           name=$(helm show chart "$CHART" | sed -n 's/^name: *//p')
