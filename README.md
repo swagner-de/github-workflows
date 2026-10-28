@@ -17,7 +17,8 @@ rewired yet; validation CI tests this repository without publishing artifacts.
 
 Every remote action is pinned to a verified commit SHA. Callers must pin these
 workflows to a commit SHA as well. Renovate treats shared workflow reference changes
-as **`ci(deps)`**, never `fix(deps)`.
+as **`ci(deps)`**. Runtime dependency updates use **`chore(deps)`**, included
+as a visible Dependencies section in Release Please so they trigger patch releases.
 
 ## Merge policy
 
@@ -46,7 +47,7 @@ use `release-type: python`; Go uses `go`. Configure the real chart path per repo
 1. Runtime update → required PR checks → Renovate auto-merge.
 2. App release PR → required checks → App-token auto-merge → published app image.
 3. Renovate discovers the published image and updates chart `appVersion` and any
-   explicit default image tag/digest, using `fix(deps)`.
+   explicit default image tag/digest, using `chore(deps)`.
 4. Chart release PR → required checks → App-token auto-merge → OCI chart.
 
 Only Release Please writes chart `version`. Do not use Renovate `bumpVersion` or

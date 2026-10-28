@@ -15,7 +15,7 @@
     {
       "matchManagers": ["custom.regex"],
       "matchFileNames": ["**/Chart.yaml"],
-      "semanticCommitType": "fix",
+      "semanticCommitType": "chore",
       "semanticCommitScope": "deps",
       "automerge": true
     }
