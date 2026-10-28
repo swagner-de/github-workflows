@@ -147,4 +147,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           IMAGE: ${{ steps.manifest.outputs.image }}
           DIGEST: ${{ steps.manifest.outputs.digest }}
-        run: gh attestation verify "oci://$IMAGE@$DIGEST" --repo "$GITHUB_REPOSITORY"
+        run: gh attestation verify "oci://$IMAGE@$DIGEST" --repo "$GITHUB_REPOSITORY" --signer-repo swagner-de/github-workflows
